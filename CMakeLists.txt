@@ -16,10 +16,14 @@ include_directories(include)
 
 add_library(allocator
     src/pool_allocator.cpp
+    src/thread_cache.cpp
+    src/multi_size_allocator.cpp
+    src/numa_utils.cpp
+    src/numa_allocator.cpp
 )
 
 add_executable(benchmark
     benchmark/benchmark.cpp
 )
 
-target_link_libraries(benchmark PRIVATE allocator pthread)
+target_link_libraries(benchmark PRIVATE allocator pthread atomic)
