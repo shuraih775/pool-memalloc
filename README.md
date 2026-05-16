@@ -117,7 +117,38 @@ make report
 
 ## Usage
 
-### Thread-local freelist
+### Freelist allocator
+
+Global fixed-size lock-free freelist.
+
+```cpp
+#include "freelist_allocator.hpp"
+
+constexpr size_t BLOCK_SIZE  = 64;
+constexpr size_t BLOCK_COUNT = 1'000'000;
+
+FreelistAllocator freelist;
+
+void* region = std::aligned_alloc(
+    64,
+    BLOCK_SIZE * BLOCK_COUNT);
+
+for (size_t i = 0; i < BLOCK_COUNT; ++i)
+{
+    freelist.push(
+        static_cast<char*>(region) +
+        (i * BLOCK_SIZE));
+}
+
+void* p = freelist.pop();
+freelist.push(p);
+```
+
+---
+
+### Thread-local freelist allocator
+
+Per-thread cache layered on top of a global freelist.
 
 ```cpp
 #include "tl_freelist_allocator.hpp"
@@ -131,7 +162,11 @@ void* p = alloc.alloc();
 alloc.dealloc(p);
 ```
 
+---
+
 ### Bitmap allocator
+
+Global bitmap allocator using atomic bit operations.
 
 ```cpp
 #include "bitmap_allocator.hpp"
@@ -144,18 +179,26 @@ void* p = alloc.alloc();
 alloc.dealloc(p);
 ```
 
-### Multi-size allocator
+---
+
+### Thread-local bitmap allocator
+
+Per-thread bitmap regions to reduce global contention.
 
 ```cpp
-#include "multi_size_allocator.hpp"
+#include "tl_bitmap_allocator.hpp"
 
-MultiSizeAllocator alloc(100'000);
+ThreadLocalBitmapAllocator alloc(
+    64,
+    125'000,
+    8);
 
-void* p = alloc.alloc(100);
-alloc.dealloc(p, 100);
+void* p = alloc.alloc();
+alloc.dealloc(p);
 ```
 
 ---
+
 
 ## Benchmark Config
 
