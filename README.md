@@ -1,156 +1,242 @@
 # Pool Memory Allocator
 
-A high-performance, lock-free memory pool allocator designed for low-latency systems. Features a hierarchical architecture with per-thread caching, batch operations, NUMA awareness, and multiple size class support.
+Fixed-size pool allocators experimenting with:
 
-## Project Structure
+* lock-free freelists
+* thread-local caches
+* bitmap allocators
+* batch transfers
+* locality-focused allocation paths
 
-```
-include/
-  freelist_allocator.hpp       # Lock-free freelist with tagged pointers (ABA-safe)
-  tl_freelist_allocator.hpp          # Per-thread cache + ThreadLocalFreelistAllocator
-  multi_size_allocator.hpp  # Multiple size class pools (16–256B)
-  numa_allocator.hpp        # NUMA-aware allocator
-  numa_utils.hpp            # OS-level NUMA primitives
-  alloc_stats.hpp           # Instrumentation & debug checks
-src/
-  freelist_allocator.cpp
-  tl_freelist_allocator.cpp
-  multi_size_allocator.cpp
-  numa_allocator.cpp
-  numa_utils.cpp
-benchmark/
-  benchmark.cpp             # Realistic pressure benchmarks
-architecture.md             # Design rationale and target architecture
-```
-
-## Requirements
-
-- C++20 compiler (GCC 11+, Clang 13+, MSVC 2022+)
-- CMake 3.16+
-- `libatomic` (linked automatically via CMake on GCC)
+Built for low-latency allocation workloads and allocator experimentation.
 
 ## Build
 
-### Release (default)
-
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+make
 ```
 
-### Debug (with instrumentation)
-
-Enables per-thread allocation counters and double-free / invalid-pointer detection:
+Debug:
 
 ```bash
-cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_CXX_FLAGS_DEBUG="-O0 -g -pthread -DALLOC_INSTRUMENTATION -DALLOC_DEBUG"
-cmake --build build_debug
+make debug
 ```
 
-| Flag                     | Effect                                         |
-|--------------------------|-------------------------------------------------|
-| `ALLOC_INSTRUMENTATION`  | Thread-local counters for allocs, frees, batches |
-| `ALLOC_DEBUG`            | Detects double-free and invalid pointer on free  |
-
-Both compile to zero cost when not defined.
-
-## Run Benchmarks
+ASAN:
 
 ```bash
-./build/benchmark
+make asan
 ```
 
-The benchmark runs two scenarios across `FreelistAllocator`, `ThreadLocalFreelistAllocator`, and `malloc/free`:
+Clean:
 
-**Burst alloc + delayed free** — allocates in bursts of 128, holds a random number of blocks (16–256) before freeing. Tests separated alloc/free phases under thread contention (1, 2, 4, 8 threads).
+```bash
+make clean
+```
 
-**Cross-thread free** — producer threads allocate and enqueue pointers; consumer threads dequeue and free. Tests cross-thread ownership transfer (1, 2, 4 producer/consumer pairs).
+---
 
-Output includes throughput (ops/sec) and latency percentiles (p50, p99) for both alloc and free operations.
+## Benchmarks
+
+Run:
+
+```bash
+make run-tl_bitmap_same_thread
+```
+
+Override parameters:
+
+```bash
+make run-tl_bitmap_same_thread \
+SIZE=64 \
+THREADS=8 \
+OPS=5000000 \
+BATCH=256 \
+POOL=1000000
+```
+
+Available benchmark families:
+
+```txt
+same_thread
+alloc_burst
+producer_consumer
+locality_walk
+alloc_storm
+random_free
+```
+
+Available allocators:
+
+```txt
+malloc (external)
+mimalloc (external)
+freelist
+tl_freelist
+bitmap
+tl_bitmap
+```
+
+Example:
+
+```bash
+make run-mimalloc_alloc_burst
+make run-tl_freelist_locality_walk
+make run-bitmap_random_free
+```
+
+---
+
+## perf
+
+perf stat:
+
+```bash
+sudo make perf-tl_bitmap_same_thread
+```
+
+perf record:
+
+```bash
+sudo make record-tl_bitmap_same_thread
+```
+
+perf c2c:
+
+```bash
+sudo make c2c-tl_bitmap_same_thread
+```
+
+perf report:
+
+```bash
+make report
+```
+
+---
 
 ## Usage
 
-### ThreadLocalFreelistAllocator (recommended)
-
-Self-contained pool with per-thread caching. Zero syscalls after construction.
+### Thread-local freelist
 
 ```cpp
 #include "tl_freelist_allocator.hpp"
 
-// 64-byte blocks, 1M blocks, batch size 64
-ThreadLocalFreelistAllocator alloc(64, 1'000'000);
+ThreadLocalFreelistAllocator alloc(
+    64,
+    1'000'000,
+    64);
 
 void* p = alloc.alloc();
 alloc.dealloc(p);
 ```
 
-### MultiSizeAllocator
+### Bitmap allocator
 
-Separate pools for size classes 16, 32, 64, 128, 256 bytes.
+```cpp
+#include "bitmap_allocator.hpp"
+
+BitmapAllocator alloc(
+    64,
+    1'000'000);
+
+void* p = alloc.alloc();
+alloc.dealloc(p);
+```
+
+### Multi-size allocator
 
 ```cpp
 #include "multi_size_allocator.hpp"
 
-MultiSizeAllocator alloc(100'000);  // blocks per size class
+MultiSizeAllocator alloc(100'000);
 
-void* p = alloc.alloc(100);        // rounds up to 128B class
+void* p = alloc.alloc(100);
 alloc.dealloc(p, 100);
 ```
 
-### NumaAllocator
+---
 
-Per-NUMA-node pools. Threads automatically pull from their local node.
+## Benchmark Config
 
-```cpp
-#include "numa_allocator.hpp"
+| Benchmark Environment | Value                                                      |
+| --------------------- | ---------------------------------------------------------- |
+| CPU                   | Ryzen 5                                                    |
+| RAM                   | 16GB                                                       |
+| Pool Size             | 1,000,000 blocks                                           |
+| Operations            | 5,000,000                                                  |
+| Compiler              | GCC C++20                                                  |
+| Build Type            | Release                                                    |
+| Compiler Flags        | `-O3 -march=native -flto -pthread -fno-omit-frame-pointer` |
+| Thread Pinning        | enabled (`taskset`)                                        |
+| Core Affinity         | `1,3,5,7`                                                  |
+| Sanitizers            | ASAN optional (`make asan`)                                |
+| Benchmark Framework   | custom microbenchmark harness                              |
+| Allocator Types       | freelist, tl_freelist, bitmap, tl_bitmap, malloc, mimalloc |
 
-NumaAllocator alloc(64, 500'000);  // block size, blocks per node
 
-void* p = alloc.alloc();
-alloc.dealloc(p);
-```
+---
 
-### FreelistAllocator (low-level)
+## Alloc Burst
 
-Bare lock-free freelist. Use directly only if you need manual control.
+### 64B — 8 Threads — Batch 256
 
-```cpp
-#include "freelist_allocator.hpp"
+| Allocator   | Time (ms) |
+| ----------- | --------- |
+| mimalloc    | 155       |
+| malloc      | 410       |
+| tl_bitmap   | 496       |
+| bitmap      | 2025      |
+| tl_freelist | 2307*     |
+| freelist    | 9476*     |
 
-FreelistAllocator freelist;
 
-// Pre-populate
-freelist.push(block);
+---
 
-// Single ops
-void* p = freelist.pop();
-freelist.push(p);
+## Locality Walk
 
-// Batch ops (one CAS per batch)
-freelist.push_bulk(head, tail);
-FreeBlock* batch = freelist.pop_bulk(64);
-```
+### 64B — Batch 256
 
-### Instrumentation (debug builds)
+| Threads | mimalloc | malloc | freelist | tl_freelist | bitmap | tl_bitmap |
+| ------- | -------- | ------ | -------- | ----------- | ------ | --------- |
+| 1       | 884      | 1014   | 819      | 817         | 856    | 857       |
+| 2       | 1358     | 1561   | 838      | 758         | 27681  | 1363      |
+| 4       | 2750     | 3117   | 926      | 892         | 51399  | 2747      |
+| 8       | 7609     | 8264   | 1789     | 1951        | 120280 | 7623      |
 
-```cpp
-#include "alloc_stats.hpp"
+---
 
-// After some alloc/free work:
-AllocStats s = ALLOC_STAT_GET();
-alloc_stats_dump("my-thread");
-// prints: [AllocStats my-thread] allocs=... deallocs=... refills=... flushes=...
-```
+## Producer Consumer
 
-## Design
+### 64B — 8 Threads — Batch 256
 
-See [architecture.md](architecture.md) for the full design rationale, tradeoff analysis, and target architecture.
+| Allocator   | Time (ms) |
+| ----------- | --------- |
+| tl_freelist | 665       |
+| mimalloc    | 755       |
+| freelist    | 935       |
+| tl_bitmap   | 966       |
+| bitmap      | 1055      |
+| malloc      | 1395      |
 
-Key decisions:
-- **Tagged pointers** for ABA safety (64-bit tag, no epoch GC)
-- **Per-thread cache** eliminates atomics on the hot path
-- **Batch transfers** (configurable, default 64) — one CAS per batch
-- **Watermark-based** refill/flush for predictable memory usage
-- **Cache-line alignment** (`alignas(64)`) on all critical structures
-- **Hardware prefetch** during pointer walks
+---
+
+## Batch Sensitivity
+
+### Alloc Burst — 64B — 8 Threads
+
+| Batch | mimalloc | malloc | tl_freelist | bitmap | tl_bitmap |
+| ----- | -------- | ------ | ----------- | ------ | --------- |
+| 16    | 155      | 324    | 102         | 2563   | 203       |
+| 64    | 128      | 305    | 88          | 2036   | 208       |
+| 256   | 155      | 410    | 2307        | 2025   | 496       |
+
+---
+
+## Notes
+
+* Thread-local caching drastically reduces bitmap allocator contention.
+* Freelist allocators show strong locality characteristics under traversal-heavy workloads.
+* Batch sizing heavily impacts thread-local freelist performance.
+* Bitmap allocators degrade significantly under shared concurrent access patterns.
+* Current freelist bulk-transfer implementation still needs correctness work under  tiny allocation sizes ( <=4).

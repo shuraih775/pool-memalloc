@@ -28,7 +28,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 
 include_directories(
     include
-    benchmark/low_latency
+    benchmark
 )
 
 # COMMON FLAGS
@@ -221,42 +221,42 @@ foreach(bench ${LOWLAT_BENCHES})
 
     add_malloc_benchmark(
         malloc_${bench}
-        benchmark/low_latency/malloc/${bench}.cpp
+        benchmark/malloc/${bench}.cpp
     )
 
     # mimalloc
 
     add_mimalloc_benchmark(
         mimalloc_${bench}
-        benchmark/low_latency/mimalloc/${bench}.cpp
+        benchmark/mimalloc/${bench}.cpp
     )
 
     # freelist
 
     add_allocator_benchmark(
         freelist_${bench}
-        benchmark/low_latency/freelist/${bench}.cpp
+        benchmark/freelist/${bench}.cpp
     )
 
     # tl_freelist
 
     add_allocator_benchmark(
         tl_freelist_${bench}
-        benchmark/low_latency/tl_freelist/${bench}.cpp
+        benchmark/tl_freelist/${bench}.cpp
     )
 
     # bitmap
 
     add_allocator_benchmark(
         bitmap_${bench}
-        benchmark/low_latency/bitmap/${bench}.cpp
+        benchmark/bitmap/${bench}.cpp
     )
 
     # tl_bitmap
 
     add_allocator_benchmark(
         tl_bitmap_${bench}
-        benchmark/low_latency/tl_bitmap/${bench}.cpp
+        benchmark/tl_bitmap/${bench}.cpp
     )
 
 endforeach()

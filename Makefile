@@ -5,7 +5,14 @@ CORES = 1,3,5,7
 
 PERF_EVENTS = cycles,instructions,branches,branch-misses,cache-references,cache-misses,L1-dcache-loads,L1-dcache-load-misses
 
-ARGS ?= --size 64 --threads 8 --ops 5000000 --batch 256 --pool 1000000
+
+SIZE ?= 64
+THREADS ?= 8
+OPS ?= 5000000
+BATCH ?= 256
+POOL ?= 1000000
+
+ARGS = --size $(SIZE) 	--threads $(THREADS) --ops $(OPS) --batch $(BATCH) --pool $(POOL)
 
 all:
 	cmake -B $(BUILD_DIR) -G Ninja -DCMAKE_BUILD_TYPE=$(CONFIG)
