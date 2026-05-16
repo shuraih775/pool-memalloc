@@ -3,11 +3,15 @@
 
 #include <algorithm>
 #include <cstring>
+#include <random>
+#include <thread>
+#include <vector>
 
-constexpr size_t BLOCK_SIZE = 1024;
-constexpr size_t BLOCK_COUNT = 1'000'000;
+BenchmarkConfig cfg;
 
 FreelistAllocator allocator;
+
+void *memory = nullptr;
 
 struct Item
 {
@@ -16,15 +20,16 @@ struct Item
 
 void initialize_pool()
 {
-    void *memory =
-        std::aligned_alloc(
-            64,
-            BLOCK_SIZE * BLOCK_COUNT);
+    size_t total = cfg.size * cfg.pool;
 
-    for (size_t i = 0; i < BLOCK_COUNT; ++i)
+    total = (total + 63) & ~63ULL;
+
+    memory = std::aligned_alloc(64, total);
+
+    for (size_t i = 0; i < cfg.pool; ++i)
     {
         allocator.push(
-            static_cast<char *>(memory) + (i * BLOCK_SIZE));
+            static_cast<char *>(memory) + (i * cfg.size));
     }
 }
 
@@ -36,9 +41,9 @@ void worker()
                 std::this_thread::get_id())));
 
     std::vector<Item> ptrs;
-    ptrs.reserve(OPS);
+    ptrs.reserve(cfg.ops);
 
-    for (size_t i = 0; i < OPS; ++i)
+    for (size_t i = 0; i < cfg.ops; ++i)
     {
         void *p = allocator.pop();
 
@@ -63,15 +68,17 @@ void worker()
     }
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    cfg = parse_args(argc, argv);
+
     initialize_pool();
 
     auto start = Clock::now();
 
     std::vector<std::thread> threads;
 
-    for (size_t i = 0; i < THREADS; ++i)
+    for (size_t i = 0; i < cfg.threads; ++i)
     {
         threads.emplace_back(worker);
     }
@@ -84,7 +91,10 @@ int main()
     auto end = Clock::now();
 
     print_result(
-        "FreelistAllocator random_free",
+        "freelist_random_free",
+        cfg,
         start,
         end);
+
+    std::free(memory);
 }

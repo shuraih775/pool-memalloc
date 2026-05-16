@@ -3,6 +3,11 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <random>
+#include <thread>
+#include <vector>
+
+BenchmarkConfig cfg;
 
 struct Item
 {
@@ -17,9 +22,9 @@ void worker()
                 std::this_thread::get_id())));
 
     std::vector<Item> ptrs;
-    ptrs.reserve(OPS);
+    ptrs.reserve(cfg.ops);
 
-    for (size_t i = 0; i < OPS; ++i)
+    for (size_t i = 0; i < cfg.ops; ++i)
     {
         size_t sz = random_size(rng);
 
@@ -44,13 +49,15 @@ void worker()
     }
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    cfg = parse_args(argc, argv);
+
     auto start = Clock::now();
 
     std::vector<std::thread> threads;
 
-    for (size_t i = 0; i < THREADS; ++i)
+    for (size_t i = 0; i < cfg.threads; ++i)
     {
         threads.emplace_back(worker);
     }
@@ -63,7 +70,8 @@ int main()
     auto end = Clock::now();
 
     print_result(
-        "malloc random_free",
+        "malloc_random_free",
+        cfg,
         start,
         end);
 }

@@ -3,11 +3,13 @@
 
 #include <algorithm>
 #include <cstring>
+#include <random>
+#include <thread>
+#include <vector>
 
-ThreadLocalBitmapAllocator allocator(
-    1024,
-    1'000'000,
-    THREADS);
+BenchmarkConfig cfg;
+
+ThreadLocalBitmapAllocator *allocator = nullptr;
 
 struct Item
 {
@@ -22,11 +24,11 @@ void worker()
                 std::this_thread::get_id())));
 
     std::vector<Item> ptrs;
-    ptrs.reserve(OPS);
+    ptrs.reserve(cfg.ops);
 
-    for (size_t i = 0; i < OPS; ++i)
+    for (size_t i = 0; i < cfg.ops; ++i)
     {
-        void *p = allocator.alloc();
+        void *p = allocator->alloc();
 
         if (!p)
             continue;
@@ -45,17 +47,26 @@ void worker()
 
     for (auto &x : ptrs)
     {
-        allocator.dealloc(x.ptr);
+        allocator->dealloc(x.ptr);
     }
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    cfg = parse_args(argc, argv);
+
+    ThreadLocalBitmapAllocator alloc(
+        cfg.size,
+        cfg.pool,
+        cfg.threads);
+
+    allocator = &alloc;
+
     auto start = Clock::now();
 
     std::vector<std::thread> threads;
 
-    for (size_t i = 0; i < THREADS; ++i)
+    for (size_t i = 0; i < cfg.threads; ++i)
     {
         threads.emplace_back(worker);
     }
@@ -68,7 +79,8 @@ int main()
     auto end = Clock::now();
 
     print_result(
-        "ThreadLocalBitmapAllocator random_free",
+        "tl_bitmap_random_free",
+        cfg,
         start,
         end);
 }

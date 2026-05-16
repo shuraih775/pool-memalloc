@@ -3,13 +3,13 @@
 
 #include <algorithm>
 #include <cstring>
+#include <random>
+#include <thread>
+#include <vector>
 
-constexpr size_t BLOCK_SIZE = 1024;
-constexpr size_t BLOCK_COUNT = 1'000'000;
+BenchmarkConfig cfg;
 
-ThreadLocalFreelistAllocator allocator(
-    BLOCK_SIZE,
-    BLOCK_COUNT);
+ThreadLocalFreelistAllocator *allocator = nullptr;
 
 struct Item
 {
@@ -24,11 +24,11 @@ void worker()
                 std::this_thread::get_id())));
 
     std::vector<Item> ptrs;
-    ptrs.reserve(OPS);
+    ptrs.reserve(cfg.ops);
 
-    for (size_t i = 0; i < OPS; ++i)
+    for (size_t i = 0; i < cfg.ops; ++i)
     {
-        void *p = allocator.alloc();
+        void *p = allocator->alloc();
 
         if (!p)
             continue;
@@ -47,17 +47,26 @@ void worker()
 
     for (auto &x : ptrs)
     {
-        allocator.dealloc(x.ptr);
+        allocator->dealloc(x.ptr);
     }
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    cfg = parse_args(argc, argv);
+
+    ThreadLocalFreelistAllocator alloc(
+        cfg.size,
+        cfg.pool,
+        cfg.batch);
+
+    allocator = &alloc;
+
     auto start = Clock::now();
 
     std::vector<std::thread> threads;
 
-    for (size_t i = 0; i < THREADS; ++i)
+    for (size_t i = 0; i < cfg.threads; ++i)
     {
         threads.emplace_back(worker);
     }
@@ -70,7 +79,8 @@ int main()
     auto end = Clock::now();
 
     print_result(
-        "ThreadLocalFreelistAllocator random_free",
+        "tl_freelist_random_free",
+        cfg,
         start,
         end);
 }
