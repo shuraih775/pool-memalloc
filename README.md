@@ -6,15 +6,15 @@ A high-performance, lock-free memory pool allocator designed for low-latency sys
 
 ```
 include/
-  pool_allocator.hpp       # Lock-free freelist with tagged pointers (ABA-safe)
-  thread_cache.hpp          # Per-thread cache + CachedAllocator
+  freelist_allocator.hpp       # Lock-free freelist with tagged pointers (ABA-safe)
+  tl_freelist_allocator.hpp          # Per-thread cache + ThreadLocalFreelistAllocator
   multi_size_allocator.hpp  # Multiple size class pools (16–256B)
   numa_allocator.hpp        # NUMA-aware allocator
   numa_utils.hpp            # OS-level NUMA primitives
   alloc_stats.hpp           # Instrumentation & debug checks
 src/
-  pool_allocator.cpp
-  thread_cache.cpp
+  freelist_allocator.cpp
+  tl_freelist_allocator.cpp
   multi_size_allocator.cpp
   numa_allocator.cpp
   numa_utils.cpp
@@ -61,7 +61,7 @@ Both compile to zero cost when not defined.
 ./build/benchmark
 ```
 
-The benchmark runs two scenarios across `MemAllocator`, `CachedAllocator`, and `malloc/free`:
+The benchmark runs two scenarios across `FreelistAllocator`, `ThreadLocalFreelistAllocator`, and `malloc/free`:
 
 **Burst alloc + delayed free** — allocates in bursts of 128, holds a random number of blocks (16–256) before freeing. Tests separated alloc/free phases under thread contention (1, 2, 4, 8 threads).
 
@@ -69,28 +69,17 @@ The benchmark runs two scenarios across `MemAllocator`, `CachedAllocator`, and `
 
 Output includes throughput (ops/sec) and latency percentiles (p50, p99) for both alloc and free operations.
 
-### Example output
-
-```
-==============================================================================================
-  BURST ALLOC + DELAYED FREE
-==============================================================================================
-MemAllocator           | burst-alloc          |  1 thr |     500000 ops |      6035775 ops/s | p50     100 ns | p99     100 ns
-CachedAllocator        | burst-alloc          |  1 thr |     500000 ops |      6673117 ops/s | p50       0 ns | p99     200 ns
-malloc/free            | burst-alloc          |  1 thr |     500000 ops |      6449141 ops/s | p50       0 ns | p99     900 ns
-```
-
 ## Usage
 
-### CachedAllocator (recommended)
+### ThreadLocalFreelistAllocator (recommended)
 
 Self-contained pool with per-thread caching. Zero syscalls after construction.
 
 ```cpp
-#include "thread_cache.hpp"
+#include "tl_freelist_allocator.hpp"
 
 // 64-byte blocks, 1M blocks, batch size 64
-CachedAllocator alloc(64, 1'000'000);
+ThreadLocalFreelistAllocator alloc(64, 1'000'000);
 
 void* p = alloc.alloc();
 alloc.dealloc(p);
@@ -122,14 +111,14 @@ void* p = alloc.alloc();
 alloc.dealloc(p);
 ```
 
-### MemAllocator (low-level)
+### FreelistAllocator (low-level)
 
 Bare lock-free freelist. Use directly only if you need manual control.
 
 ```cpp
-#include "pool_allocator.hpp"
+#include "freelist_allocator.hpp"
 
-MemAllocator freelist;
+FreelistAllocator freelist;
 
 // Pre-populate
 freelist.push(block);

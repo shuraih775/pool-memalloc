@@ -1,9 +1,10 @@
-#ifndef LOCK_FREE_FREE_LIST_HPP
-#define LOCK_FREE_FREE_LIST_HPP
+#ifndef FREE_LIST_ALLOCATOR_HPP
+#define FREE_LIST_ALLOCATOR_HPP
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 
 struct alignas(64) FreeBlock
 {
@@ -21,14 +22,15 @@ struct TaggedPtr
     }
 };
 
-class MemAllocator
+class FreelistAllocator
 {
 private:
     alignas(64) std::atomic<TaggedPtr> head;
     char pad_[64 - sizeof(std::atomic<TaggedPtr>)];
+    std::mutex bulk_lock;
 
 public:
-    MemAllocator();
+    FreelistAllocator();
 
     void push(void *ptr);
     void *pop();
@@ -37,4 +39,4 @@ public:
     FreeBlock *pop_bulk(size_t n);
 };
 
-#endif // LOCK_FREE_FREE_LIST_HPP
+#endif // FREE_LIST_ALLOCATOR_HPP

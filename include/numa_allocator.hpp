@@ -1,15 +1,15 @@
 #ifndef NUMA_ALLOCATOR_HPP
 #define NUMA_ALLOCATOR_HPP
 
-#include "pool_allocator.hpp"
-#include "thread_cache.hpp"
+#include "freelist_allocator.hpp"
+#include "tl_freelist_allocator.hpp"
 #include "numa_utils.hpp"
 
 // Per-NUMA-node pool: owns a contiguous aligned region allocated on the node,
 // a global lock-free freelist, and per-thread caches that pull from it.
 struct NumaPool
 {
-    MemAllocator global;
+    FreelistAllocator global;
     void *region;
     size_t region_size;
     size_t block_size;

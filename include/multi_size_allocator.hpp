@@ -1,7 +1,7 @@
 #ifndef MULTI_SIZE_ALLOCATOR_HPP
 #define MULTI_SIZE_ALLOCATOR_HPP
 
-#include "thread_cache.hpp"
+#include "tl_freelist_allocator.hpp"
 #include <cstddef>
 
 class MultiSizeAllocator
@@ -20,7 +20,7 @@ public:
     void dealloc(void *ptr, size_t size);
 
 private:
-    CachedAllocator *pools[NUM_CLASSES];
+    ThreadLocalFreelistAllocator *pools[NUM_CLASSES];
 
     static size_t class_index(size_t size);
 };

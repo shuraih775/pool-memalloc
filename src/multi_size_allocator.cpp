@@ -7,14 +7,14 @@ size_t MultiSizeAllocator::class_index(size_t size)
         if (size <= SIZE_CLASSES[i])
             return i;
     }
-    return NUM_CLASSES; // oversized
+    return NUM_CLASSES;
 }
 
 MultiSizeAllocator::MultiSizeAllocator(size_t blocks_per_class, size_t batch)
 {
     for (size_t i = 0; i < NUM_CLASSES; ++i)
     {
-        pools[i] = new CachedAllocator(SIZE_CLASSES[i], blocks_per_class, batch);
+        pools[i] = new ThreadLocalFreelistAllocator(SIZE_CLASSES[i], blocks_per_class, batch);
     }
 }
 
